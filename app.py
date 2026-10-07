@@ -1,91 +1,12 @@
-from flask import Flask, request, redirect, url_for, flash, render_template_string
-import sqlite3
-from datetime import datetime
-from pathlib import Path
-import os
-import requests
+from flask import Flask, render_template_string
 
 # Design reference used:
 # "ActualizeWeb — We Build Your Business Online (provided PDF)"
-# The layout, content structure, light/green visual language, cards,
+# The layout, content structure, dark/orange visual language, cards,
 # CTA style and section flow are recreated as a Flask implementation.
 
 app = Flask(__name__)
 app.secret_key = "change-this-secret-key"
-
-BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "actualizeweb.db"
-GOOGLE_SHEET_WEBHOOK_URL = os.getenv("GOOGLE_SHEET_WEBHOOK_URL", "").strip()
-
-
-def init_db():
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS quotes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                business TEXT NOT NULL,
-                email TEXT NOT NULL,
-                phone TEXT,
-                goal TEXT,
-                message TEXT,
-                created_at TEXT NOT NULL
-            )
-        """)
-        conn.commit()
-
-
-def save_to_google_sheet(form):
-    """Send the same quote data to a Google Apps Script web app.
-    SQLite remains the local fallback/database if Google Sheets is not configured.
-    """
-    if not GOOGLE_SHEET_WEBHOOK_URL or "REAL_SCRIPT_ID" in GOOGLE_SHEET_WEBHOOK_URL:
-        return None
-
-    payload = {
-        "name": form.get("name", "").strip(),
-        "business": form.get("business", "").strip(),
-        "email": form.get("email", "").strip(),
-        "phone": form.get("phone", "").strip(),
-        "goal": form.get("goal", "").strip(),
-        "message": form.get("message", "").strip(),
-        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    }
-    try:
-        response = requests.post(GOOGLE_SHEET_WEBHOOK_URL, data=payload, timeout=8)
-        if not response.ok:
-            app.logger.warning(
-                "Google Sheets webhook returned HTTP %s: %s",
-                response.status_code,
-                response.text[:200],
-            )
-            return False
-        return True
-    except requests.RequestException as exc:
-        app.logger.warning("Google Sheets webhook request failed: %s", exc)
-        return False
-
-
-def save_quote(form):
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            """
-            INSERT INTO quotes
-            (name, business, email, phone, goal, message, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                form.get("name", "").strip(),
-                form.get("business", "").strip(),
-                form.get("email", "").strip(),
-                form.get("phone", "").strip(),
-                form.get("goal", "").strip(),
-                form.get("message", "").strip(),
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            ),
-        )
-        conn.commit()
-
 
 PAGE = r"""
 <!DOCTYPE html>
@@ -116,8 +37,6 @@ PAGE = r"""
         }
 
         *{box-sizing:border-box;margin:0;padding:0}
-        /* Single light theme with a white and green palette. */
-        :root{--bg:#f7fbf8;--panel:#ffffff;--panel-2:#eaf6ee;--line:#b9dcc4;--orange:#168447;--orange-soft:#106b38;--cream:#143321;--muted:#547060;--yellow:#d6a928;--black:#102318}
 
         html{scroll-behavior:smooth}
         body{
@@ -146,9 +65,9 @@ PAGE = r"""
             position:sticky;
             top:0;
             z-index:100;
-            background:rgba(247,251,248,.96);
+            background:rgba(13,13,13,.94);
             backdrop-filter:blur(14px);
-            border-bottom:1px solid #b9dcc4;
+            border-bottom:1px solid #6b2c19;
         }
         .nav{
             height:86px;
@@ -167,7 +86,7 @@ PAGE = r"""
             gap:30px;
             align-items:center;
             font-size:13px;
-            color:#315541;
+            color:#ddd;
         }
         .menu a:hover{color:var(--orange)}
         .menu-toggle{
@@ -181,10 +100,15 @@ PAGE = r"""
 
         .hero{
             min-height:790px;
-            padding:58px 0 78px;
+            padding:86px 0 110px;
             display:flex;
-            flex-direction:column;
-            justify-content:center;
+            align-items:center;
+        }
+        .hero-layout{
+            display:grid;
+            grid-template-columns:minmax(0,1.08fr) minmax(360px,.92fr);
+            gap:58px;
+            align-items:center;
         }
         .hero-visual{
             width:min(820px,100%);
@@ -199,6 +123,7 @@ PAGE = r"""
                 linear-gradient(135deg,#12353b 0%,#0e1d2d 43%,#20262e 100%);
             box-shadow:0 25px 80px rgba(0,0,0,.5);
         }
+        .hero-layout .hero-visual{width:100%;margin:0;height:390px}
         .screen{
             position:absolute;
             width:73%;
@@ -344,14 +269,14 @@ PAGE = r"""
         .btn-outline:hover{background:var(--orange);color:#111}
 
         section{padding:105px 0}
-        .dark-section{background:#eaf6ee}
+        .dark-section{background:#1e1e1e}
         .section-head{display:flex;justify-content:space-between;align-items:end;gap:30px;margin-bottom:48px}
         h2{
             font-size:clamp(38px,5vw,60px);
             line-height:1;
             letter-spacing:-.045em;
         }
-        .section-intro{max-width:680px;color:#547060;font-size:16px;margin-top:16px}
+        .section-intro{max-width:680px;color:#aaa;font-size:16px;margin-top:16px}
         .small-link{
             color:var(--orange);
             font-size:12px;
@@ -443,13 +368,13 @@ PAGE = r"""
         }
         .check-list{list-style:none;display:grid;gap:18px;margin-top:30px}
         .check-list li{display:flex;gap:13px;color:#d2cbc3;font-size:14px}
-        .check-list li:before{content:"✓";color:var(--orange);font-weight:900}
+        .check-list li:before{content:"";width:24px;height:24px;flex:none;border:1px solid #71351f;border-radius:50%;background:#2a1b14 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e95b27' stroke-width='2.5'%3E%3Cpath d='m7 12 3 3 7-7'/%3E%3C/svg%3E") center/14px no-repeat}
         .metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#333}
         .metric{background:#111;padding:32px}
-        .metric strong{font-size:43px;display:block}
-        .metric span{font-size:12px;color:#999}
+        .metric strong{font-size:43px;display:block;color:var(--orange);font-weight:500;letter-spacing:-.03em}
+        .metric span{font-size:12px;color:var(--cream);line-height:1.7}
 
-        .stories{display:grid;grid-template-columns:repeat(2,1fr);gap:22px}
+        .stories{display:grid;grid-template-columns:repeat(4,1fr);gap:22px}
         .story{
             background:#121212;
             border:1px solid #333;
@@ -459,6 +384,8 @@ PAGE = r"""
         .quote{font-size:18px;line-height:1.8;color:#e8e1d8;margin-bottom:25px}
         .person{font-size:12px;color:#aaa}
         .person strong{color:#eee;display:block;margin-bottom:4px}
+        .person{position:relative;padding-left:48px;min-height:38px}
+        .person:before{content:"";position:absolute;left:0;top:0;width:34px;height:34px;border-radius:50%;border:2px solid var(--orange);background:linear-gradient(145deg,#e8c1a2,#453029)}
 
         .cta{
             text-align:center;
@@ -469,45 +396,22 @@ PAGE = r"""
             border-bottom:1px solid #3a2118;
         }
         .cta p{max-width:650px;margin:18px auto 30px;color:#aaa}
-        .quote-wrap{max-width:820px;margin:45px auto 0;text-align:left}
-        .form{
-            background:#171717;
-            border:1px solid #5c2b1b;
-            border-radius:16px;
-            padding:30px;
-        }
-        .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}
-        .field{display:flex;flex-direction:column;gap:7px}
-        .field.full{grid-column:1/-1}
-        label{font:500 11px "DM Mono",monospace;color:#aaa;text-transform:uppercase;letter-spacing:.12em}
-        input,textarea,select{
-            width:100%;
-            border:1px solid #3b3b3b;
-            background:#0e0e0e;
-            color:#eee;
-            border-radius:8px;
-            padding:13px 14px;
-            outline:none;
-        }
-        input:focus,textarea:focus,select:focus{border-color:var(--orange)}
-        textarea{min-height:110px;resize:vertical}
-        .form-actions{margin-top:20px;display:flex;justify-content:space-between;align-items:center;gap:20px}
-        .note{font-size:11px;color:#777}
-
-        footer{padding:65px 0 25px;background:#0b0b0b}
+        footer{padding:65px 0 25px;background:#db5b2b}
         .footer-top{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:45px;padding-bottom:50px}
         .footer-brand p{max-width:330px;color:#888;font-size:13px;margin-top:15px}
-        footer h4{font-size:12px;color:#eee;margin-bottom:16px}
-        footer a,footer li{color:#888;font-size:12px;margin-bottom:9px}
+        footer h4{font-size:12px;color:#fff;margin-bottom:16px}
+        footer a,footer li{color:#fff;font-size:12px;margin-bottom:9px}
         footer a:hover{color:var(--orange)}
+        footer .footer-brand p{color:rgba(255,255,255,.9)}
+        footer a:hover{color:#17130a}
         .footer-list{list-style:none}
         .footer-bottom{
-            border-top:1px solid #242424;
+            border-top:1px solid rgba(255,255,255,.35);
             padding-top:22px;
             display:flex;
             justify-content:space-between;
             gap:20px;
-            color:#666;
+            color:rgba(255,255,255,.8);
             font-size:11px;
         }
         .flash{
@@ -526,12 +430,61 @@ PAGE = r"""
         }
         @keyframes fade{0%,80%{opacity:1}100%{opacity:0;pointer-events:none}}
 
+        @keyframes softRise{
+            from{opacity:0;transform:translateY(18px)}
+            to{opacity:1;transform:translateY(0)}
+        }
+        @keyframes softPulse{
+            0%,100%{box-shadow:0 12px 30px rgba(244,202,67,.18)}
+            50%{box-shadow:0 16px 42px rgba(244,202,67,.34)}
+        }
+        .hero-copy-block,.hero-visual{animation:softRise .75s ease both}
+        .hero-visual{animation-delay:.12s}
+        .btn-primary{animation:softPulse 3.8s ease-in-out infinite}
+        .btn,.feature,.work-card,.story,.metric,.small-link{
+            -webkit-tap-highlight-color:transparent;
+            transition:transform .25s ease,box-shadow .25s ease,filter .25s ease,border-color .25s ease;
+        }
+        .btn:active{transform:translateY(2px) scale(.97);filter:brightness(.96)}
+        .feature:active,.work-card:active,.story:active,.metric:active{transform:translateY(2px) scale(.99)}
+        @media(prefers-reduced-motion:reduce){
+            *,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}
+        }
+
+        /* Premium depth / 3D presentation */
+        .hero-visual{
+            transform:perspective(1200px) rotateX(2deg) rotateY(-2deg);
+            transition:transform .6s ease, box-shadow .6s ease;
+            box-shadow:0 35px 90px rgba(0,0,0,.58), 0 0 0 1px rgba(241,90,36,.16), 0 0 70px rgba(241,90,36,.08);
+        }
+        .hero-visual:hover{transform:perspective(1200px) rotateX(0deg) rotateY(0deg) translateY(-7px) scale(1.01);}
+        .screen{transform:translateZ(25px);}
+        .feature,.work-card,.story,.metric{
+            transform:translateZ(0);
+            transition:transform .35s ease, box-shadow .35s ease, border-color .35s ease;
+        }
+        .feature:hover,.work-card:hover,.story:hover,.metric:hover{
+            transform:perspective(900px) rotateX(1deg) translateY(-8px);
+            box-shadow:0 24px 55px rgba(0,0,0,.24);
+            border-color:rgba(241,90,36,.65);
+        }
+        #services .section-head{text-align:center;display:block}
+        #services .section-intro{max-width:680px;margin:18px auto 0}
+        #services .small-link{display:none}
+        #services .features{grid-template-columns:repeat(4,1fr);gap:30px;margin-top:68px}
+        #services .feature{min-height:350px}
+        .work-image{position:relative;overflow:hidden;}
+        .work-image:before{content:"";position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.13),transparent 32%,transparent 68%,rgba(241,90,36,.13));pointer-events:none;z-index:2;}
+        .work-card:hover .work-image{transform:scale(1.01);}
+        .work-card:hover .work-image[style]{background-position:center;}
+
         @media(max-width:850px){
             .container{width:min(var(--max),calc(100% - 34px))}
             .menu{display:none;position:absolute;left:0;right:0;top:86px;background:#111;padding:20px;flex-direction:column;align-items:flex-start;border-bottom:1px solid #5d2817}
             .menu.open{display:flex}
             .menu-toggle{display:block}
-            .hero{min-height:auto;padding-top:38px}
+            .hero{min-height:auto;padding-top:60px}
+            .hero-layout{grid-template-columns:1fr;gap:36px}
             .hero-visual{height:270px;margin-bottom:45px}
             h1{font-size:54px}
             .stats,.features,.work-grid,.stories,.difference{grid-template-columns:1fr}
@@ -557,33 +510,160 @@ PAGE = r"""
             .section-head{align-items:flex-start;flex-direction:column}
             .features{gap:15px}
             .feature{min-height:210px;padding:25px}
-            .form-grid{grid-template-columns:1fr}
-            .field.full{grid-column:auto}
-            .form-actions{align-items:stretch;flex-direction:column}
             .footer-top{grid-template-columns:1fr}
             .footer-bottom{flex-direction:column}
+        }
+
+        /* Reference theme: one consistent dark editorial system. */
+        :root{
+            --bg:#0e0e0e;
+            --panel:#1d1d1d;
+            --panel-2:#171717;
+            --line:#73341f;
+            --orange:#e95b27;
+            --orange-soft:#c9481d;
+            --cream:#f4efe7;
+            --muted:#aaa39b;
+            --yellow:#f4ca43;
+            --max:1148px;
+        }
+        body{background:var(--bg);color:var(--cream);font-family:Inter,Arial,sans-serif}
+        body:before{width:680px;height:680px;right:-300px;top:270px;background:radial-gradient(circle,rgba(233,91,39,.10),transparent 68%)}
+        header{height:94px;background:rgba(14,14,14,.96);border-bottom:1px solid var(--orange);box-shadow:none}
+        .nav{height:94px}
+        .brand{font-size:24px;letter-spacing:.01em;white-space:nowrap}
+        .brand span{color:var(--orange)}
+        .menu{gap:28px;color:var(--cream);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+        .menu a{transition:color .2s ease}
+        .menu a:last-child{background:var(--yellow);color:#17130a;border-radius:999px;padding:16px 19px}
+        .menu a:last-child:hover{color:#17130a;filter:brightness(1.05)}
+        .hero{min-height:720px;padding:98px 0 92px}
+        .hero-layout{grid-template-columns:minmax(0,1fr) minmax(400px,.95fr);gap:74px}
+        .hero-copy-block{padding-top:18px}
+        .eyebrow{color:var(--orange);font-size:14px;letter-spacing:.24em;margin-bottom:27px}
+        h1{font-size:clamp(58px,7.2vw,92px);line-height:.93;letter-spacing:-.065em;margin-bottom:31px}
+        h1 span{color:var(--orange)}
+        .hero-copy{max-width:610px;color:#e7e1da;font-size:17px;line-height:1.75;letter-spacing:.015em;margin-bottom:29px}
+        .pills{gap:12px;margin-bottom:37px}
+        .pill{border-color:var(--orange);color:var(--orange);padding:10px 16px;font-size:11px}
+        .btn{min-height:54px;padding:0 29px;font-size:12px;letter-spacing:.12em}
+        .btn-primary{background:var(--yellow);border-color:var(--yellow)}
+        .btn-outline{border-color:var(--orange);color:var(--orange)}
+        .hero-layout .hero-visual{height:382px;border-color:var(--orange);border-radius:18px}
+        section{padding:118px 0}
+        .dark-section{background:#1b1b1b}
+        .section-head{margin-bottom:52px}
+        h2{font-size:clamp(43px,5.2vw,67px);line-height:.94;letter-spacing:-.06em}
+        .section-intro{color:#aaa39b;font-size:15px;line-height:1.75}
+        .small-link{color:var(--orange);font-size:13px}
+        .stats{border-color:#3c3c3c}
+        .stat{padding:39px 20px;border-color:#3c3c3c}
+        .stat-number{font-size:55px}
+        .stat-label{color:#aaa39b}
+        .features{gap:20px}
+        .feature{min-height:235px;background:#121212;border-color:#71351f;border-radius:16px;padding:33px}
+        .feature:hover{border-color:var(--orange)}
+        .icon{background:#2a1911;color:var(--orange)}
+        .feature p{color:#b8b0a8}
+        .work-grid{grid-template-columns:repeat(3,1fr);gap:28px}
+        .work-card{min-height:350px;background:#191919;border-color:#61301f;border-radius:15px}
+        .work-image{height:245px}
+        .work-body{padding:23px 25px}
+        .work-body p{color:#aaa39b}
+        .difference{gap:92px}
+        .metric-grid{gap:1px;background:#3c3c3c}
+        .metric{background:#121212;padding:35px}
+        .stories{grid-template-columns:repeat(4,1fr);gap:20px}
+        .story{background:#1b1b1b;border-color:#73341f;border-radius:15px;padding:31px}
+        .quote{font-size:17px;color:#e8e1d8}
+        .cta{background:radial-gradient(circle at 72% 0%,rgba(233,91,39,.13),transparent 40%),#111;border-color:#3a2118}
+        footer{background:#db5b2b}
+        .stats .stat-number{color:var(--orange);font-size:43px;font-weight:500;letter-spacing:-.03em}
+        .stats .stat-label{color:var(--cream);font-size:15px}
+        .stats .stat{padding:48px 20px}
+        .stats{border-top:1px solid var(--orange);border-bottom:0}
+        .stats .stat{border-right:0}
+        .icon svg,.contact-icon svg{width:24px;height:24px;display:block}
+        .portfolio-grid{
+            display:grid;
+            grid-template-columns:1.35fr .8fr .8fr;
+            grid-template-rows:196px 196px 196px;
+            gap:16px;
+        }
+        .portfolio-item{
+            min-height:0;
+            border:1px solid rgba(233,91,39,.8);
+            border-radius:10px;
+            background-size:cover;
+            background-position:center;
+            box-shadow:0 18px 40px rgba(0,0,0,.2);
+            transition:transform .3s ease,filter .3s ease;
+        }
+        .portfolio-item:hover{transform:translateY(-5px);filter:saturate(1.12)}
+        .portfolio-salon{grid-column:1 / 3;background-image:linear-gradient(rgba(10,12,20,.12),rgba(10,12,20,.25)),url('https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?auto=format&fit=crop&w=1400&q=90')}
+        .portfolio-fitness{grid-column:3;grid-row:1 / 3;background-image:linear-gradient(rgba(9,10,30,.1),rgba(9,10,30,.35)),url('https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1000&q=90')}
+        .portfolio-finance{grid-column:1;grid-row:2;background-image:linear-gradient(rgba(7,14,25,.12),rgba(7,14,25,.25)),url('https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=1000&q=90')}
+        .portfolio-store{grid-column:2;grid-row:2;background-image:linear-gradient(rgba(8,10,12,.08),rgba(8,10,12,.2)),url('https://images.unsplash.com/photo-1556740758-90de374c12ad?auto=format&fit=crop&w=1000&q=90')}
+        .portfolio-code{grid-column:1 / 3;grid-row:3;background-image:linear-gradient(rgba(8,10,12,.05),rgba(8,10,12,.18)),url('https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=1400&q=90')}
+        .portfolio-restaurant{grid-column:3;grid-row:3;background-image:linear-gradient(rgba(8,10,12,.04),rgba(8,10,12,.18)),url('https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1000&q=90')}
+        .contact-layout{display:grid;grid-template-columns:1fr 1fr;gap:86px;align-items:center}
+        .contact-copy h2{margin-bottom:28px}
+        .contact-copy>p{max-width:600px;color:#e8e1da;font-size:17px;line-height:1.75}
+        .contact-details{display:grid;gap:21px;margin-top:38px}
+        .contact-detail{display:flex;align-items:center;gap:15px}
+        .contact-icon{width:52px;height:52px;display:grid;place-items:center;border:1px solid #73341f;border-radius:11px;background:#2a1b14;color:var(--orange);font-size:23px}
+        .contact-detail small,.contact-detail strong{display:block}
+        .contact-detail small{font:500 11px "DM Mono",monospace;color:#ddd;text-transform:none;margin-bottom:4px}
+        .contact-detail strong{font-size:13px;color:var(--cream)}
+        .contact-card{background:#111;border:1px solid var(--orange);border-radius:16px;padding:42px}
+        .contact-card h3{font-size:27px;line-height:1.15;margin-bottom:12px}
+        .contact-card>p{color:#e1dcd5;font-size:13px;line-height:1.7}
+        .contact-card ul{list-style:none;display:grid;gap:14px;margin:30px 0}
+        .contact-card li{font-size:13px;color:#e1dcd5;padding-left:20px;position:relative}
+        .contact-card li:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--orange);position:absolute;left:0;top:8px}
+        .contact-actions{display:flex;gap:14px}
+        .contact-actions .btn{flex:1;text-align:center}
+        .contact-note{text-align:center;margin-top:23px!important;font-size:12px!important}
+        @media(max-width:850px){
+            header,.nav{height:78px}
+            .menu{top:78px}
+            .hero{padding-top:65px}
+            .hero-layout{grid-template-columns:1fr;gap:42px}
+            .stories{grid-template-columns:repeat(2,1fr)}
+            .hero-layout .hero-visual{height:300px}
+            #services .features{grid-template-columns:repeat(2,1fr);gap:16px;margin-top:42px}
+            .portfolio-grid{grid-template-columns:1fr 1fr;grid-template-rows:170px 170px 170px}
+            .portfolio-salon{grid-column:1 / 3;grid-row:1}
+            .portfolio-fitness{grid-column:1;grid-row:2 / 4}
+            .portfolio-finance{grid-column:2;grid-row:2}
+            .portfolio-store{grid-column:2;grid-row:3}
+            .portfolio-code,.portfolio-restaurant{display:none}
+            .contact-layout{grid-template-columns:1fr;gap:42px}
+            .menu a:last-child{padding:0;background:none;color:var(--cream)}
+        }
+        @media(max-width:560px){
+            #services .features{grid-template-columns:1fr                .portfolio-grid{grid-template-columns:1fr;grid-template-rows:220px 160px 160px 160px}
+                .portfolio-item,.portfolio-salon,.portfolio-fitness,.portfolio-finance,.portfolio-store{grid-column:1;grid-row:auto}
+                .portfolio-code,.portfolio-restaurant{display:block;grid-column:1;grid-row:auto}
+                .contact-card{padding:25px}
+                .contact-actions{flex-direction:column}
+            }
+            .stories{grid-template-columns:1fr}
         }
     </style>
 </head>
 
 <body id="top">
-
-{% with messages = get_flashed_messages() %}
-    {% if messages %}
-        <div class="flash">{{ messages[-1] }}</div>
-    {% endif %}
-{% endwith %}
-
 <header>
     <div class="container nav">
         <a href="#top" class="brand">Actualize<span>Web</span></a>
 
         <nav class="menu" id="menu">
             <a href="#services">Services</a>
-            <a href="#work">Our Work</a>
-            <a href="#difference">Why Us</a>
-            <a href="#stories">Stories</a>
-            <a href="#quote">Start a Project</a>
+            <a href="#portfolio">Portfolio</a>
+            <a href="#why-us">Why Us</a>
+            <a href="#testimonials">Testimonials</a>
+            <a href="#contact">Start a Project</a>
         </nav>
 
         <button class="menu-toggle" onclick="toggleMenu()" aria-label="Open menu">☰</button>
@@ -594,7 +674,30 @@ PAGE = r"""
 
     <!-- HERO -->
     <section class="hero">
-        <div class="container">
+        <div class="container hero-layout">
+
+            <div class="hero-copy-block">
+                <div class="eyebrow">Digital Growth Partner</div>
+
+                <h1>We Build Your<br><span>Business Online</span></h1>
+
+                <p class="hero-copy">
+                    From booking pages to client dashboards — ActualizeWeb delivers
+                    fast, custom websites that work hard for your business.
+                    You own it forever. No subscriptions. No lock-in.
+                </p>
+
+                <div class="pills">
+                    <span class="pill">◈ Lifetime Ownership</span>
+                    <span class="pill">⊘ No Monthly Fees</span>
+                    <span class="pill">ϟ Fast Delivery</span>
+                </div>
+
+                <div class="buttons">
+                    <a href="#contact" class="btn btn-primary">Launch My Website</a>
+                    <a href="#portfolio" class="btn btn-outline">View Our Work</a>
+                </div>
+            </div>
 
             <div class="hero-visual" aria-label="Website dashboard preview">
                 <div class="screen">
@@ -638,26 +741,6 @@ PAGE = r"""
                 </div>
             </div>
 
-            <div class="eyebrow">Digital Growth Partner</div>
-
-            <h1>We Build Your<br><span>Business Online</span></h1>
-
-            <p class="hero-copy">
-                From booking pages to client dashboards — ActualizeWeb delivers
-                fast, custom websites that work hard for your business.
-                You own it forever. No subscriptions. No lock-in.
-            </p>
-
-            <div class="pills">
-                <span class="pill">◈ Lifetime Ownership</span>
-                <span class="pill">⊘ No Monthly Fees</span>
-                <span class="pill">ϟ Fast Delivery</span>
-            </div>
-
-            <div class="buttons">
-                <a href="#quote" class="btn btn-primary">Launch My Website</a>
-                <a href="#work" class="btn btn-outline">View Our Work</a>
-            </div>
         </div>
     </section>
 
@@ -693,27 +776,27 @@ PAGE = r"""
                         to convert visitors into paying clients.
                     </p>
                 </div>
-                <a href="#quote" class="small-link">Get a Free Quote →</a>
+                <a href="#contact" class="small-link">Get a Free Quote →</a>
             </div>
 
             <div class="features">
                 <article class="feature">
-                    <div class="icon">▦</div>
+                    <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16M8 14h.01M12 14h.01M16 14h.01M8 17h.01M12 17h.01"/></svg></div>
                     <h3>Smart Booking</h3>
                     <p>Client-facing appointment pages with time slots, service selection, and confirmation flows — no third-party app required.</p>
                 </article>
                 <article class="feature">
-                    <div class="icon">⌁</div>
+                    <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg></div>
                     <h3>Business Monitoring</h3>
                     <p>Dashboards showing visit trends, inquiry volume, and lead sources — so you always know what's working.</p>
                 </article>
                 <article class="feature">
-                    <div class="icon">♧</div>
+                    <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M18 8a4 4 0 0 0-7.2-2.4A4 4 0 1 0 7 13h10a4 4 0 0 0 1-5Z"/><path d="M12 13v7M9 20h6"/></svg></div>
                     <h3>Client Notifications</h3>
                     <p>Automated email and WhatsApp nudges that remind clients, confirm bookings, and re-engage dormant leads.</p>
                 </article>
                 <article class="feature">
-                    <div class="icon">▢</div>
+                    <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
                     <h3>Safe Client Tools</h3>
                     <p>Secure portals, encrypted data handling, and SSL-protected pages — trust built in from day one.</p>
                 </article>
@@ -722,50 +805,29 @@ PAGE = r"""
     </section>
 
     <!-- WORK -->
-    <section id="work">
+    <section id="portfolio">
         <div class="container">
             <div class="section-head">
                 <div>
                     <div class="eyebrow">Recent Work</div>
                     <h2>Built for Real Businesses</h2>
                 </div>
-                <a href="#quote" class="small-link">Request Yours</a>
+                <a href="#contact" class="small-link">Request Yours</a>
             </div>
 
-            <div class="work-grid">
-                <article class="work-card">
-                    <div class="work-image" style="background-image:linear-gradient(rgba(5,10,14,.20),rgba(5,10,14,.70)),url('https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?auto=format&fit=crop&w=1200&q=85');background-size:cover;background-position:center;">
-                        <div class="mock-screen"></div>
-                    </div>
-                    <div class="work-body">
-                        <h3>Salon & Spa Booking</h3>
-                        <p>Elegant service pages, live appointment booking and confirmation flows that turn visitors into appointments.</p>
-                    </div>
-                </article>
-                <article class="work-card">
-                    <div class="work-image" style="background-image:linear-gradient(rgba(5,10,14,.15),rgba(5,10,14,.72)),url('https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=1200&q=85');background-size:cover;background-position:center;">
-                        <div class="mock-screen" style="background:linear-gradient(140deg,#503021,#160d0a)"></div>
-                    </div>
-                    <div class="work-body">
-                        <h3>Business & Lead Systems</h3>
-                        <p>Clear enquiry journeys, lead capture and business information designed for local service owners.</p>
-                    </div>
-                </article>
-                <article class="work-card">
-                    <div class="work-image" style="background-image:linear-gradient(rgba(5,10,14,.12),rgba(5,10,14,.74)),url('https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=85');background-size:cover;background-position:center;">
-                        <div class="mock-screen" style="background:linear-gradient(140deg,#234a3a,#07150f)"></div>
-                    </div>
-                    <div class="work-body">
-                        <h3>Fitness & Membership</h3>
-                        <p>Modern schedules, membership enquiries and customer tools that replace scattered manual workflows.</p>
-                    </div>
-                </article>
+            <div class="portfolio-grid">
+                <div class="portfolio-item portfolio-salon" aria-label="Salon website design"></div>
+                <div class="portfolio-item portfolio-fitness" aria-label="Fitness website design"></div>
+                <div class="portfolio-item portfolio-finance" aria-label="Finance dashboard design"></div>
+                <div class="portfolio-item portfolio-store" aria-label="Online store website design"></div>
+                <div class="portfolio-item portfolio-code" aria-label="Coding website design"></div>
+                <div class="portfolio-item portfolio-restaurant" aria-label="Restaurant website design"></div>
             </div>
         </div>
     </section>
 
     <!-- DIFFERENCE -->
-    <section id="difference" class="dark-section">
+    <section id="why-us" class="dark-section">
         <div class="container difference">
             <div>
                 <div class="eyebrow">Our Difference</div>
@@ -793,7 +855,7 @@ PAGE = r"""
     </section>
 
     <!-- STORIES -->
-    <section id="stories">
+    <section id="testimonials">
         <div class="container">
             <div class="eyebrow">Client Stories</div>
             <h2>They Launched.<br>They Grew.</h2>
@@ -812,6 +874,17 @@ PAGE = r"""
                 </article>
                 <article class="story">
                     <p class="quote">
+                        “I needed a credible website without agency pricing.
+                        ActualizeWeb delivered a polished, fast site that my
+                        enterprise clients actually compliment.”
+                    </p>
+                    <div class="person">
+                        <strong>Rohit Verma</strong>
+                        Principal, Verma Capital Advisory — Delhi
+                    </div>
+                </article>
+                <article class="story">
+                    <p class="quote">
                         “My gym membership inquiries doubled within a month of launch.
                         The class schedule section alone replaced the three WhatsApp
                         groups I was managing manually.”
@@ -821,60 +894,58 @@ PAGE = r"""
                         Founder, IronEdge Fitness — Pune
                     </div>
                 </article>
+                <article class="story">
+                    <p class="quote">
+                        “Our clinic finally looks as professional online as it does
+                        in person. New patients can find the right information and
+                        reach us without calling around.”
+                    </p>
+                    <div class="person">
+                        <strong>Dr. Priya Nair</strong>
+                        Director, ClearPath Clinic — Bangalore
+                    </div>
+                </article>
             </div>
         </div>
     </section>
 
-    <!-- CTA + FORM -->
-    <section id="quote" class="cta">
-        <div class="container">
-            <div class="eyebrow">Let's Build Together</div>
-            <h2>Your Website Starts Here</h2>
-            <p>
-                Tell us what your business does, who you serve, and what you need.
-                We'll handle the rest — from design to launch — in days, not months.
-            </p>
-
-            <div class="quote-wrap">
-                <form class="form" method="POST" action="{{ url_for('quote') }}">
-                    <div class="form-grid">
-                        <div class="field">
-                            <label>Your Name</label>
-                            <input name="name" required placeholder="Your full name">
-                        </div>
-                        <div class="field">
-                            <label>Business Name</label>
-                            <input name="business" required placeholder="Your business">
-                        </div>
-                        <div class="field">
-                            <label>Email</label>
-                            <input type="email" name="email" required placeholder="you@example.com">
-                        </div>
-                        <div class="field">
-                            <label>Phone / WhatsApp</label>
-                            <input name="phone" placeholder="+91 ...">
-                        </div>
-                        <div class="field full">
-                            <label>Primary Goal</label>
-                            <select name="goal">
-                                <option>Bookings</option>
-                                <option>Lead Generation</option>
-                                <option>Portfolio / Brand Website</option>
-                                <option>Business Information</option>
-                                <option>Custom System / Dashboard</option>
-                            </select>
-                        </div>
-                        <div class="field full">
-                            <label>What Do You Need?</label>
-                            <textarea name="message" placeholder="Tell us about your business, required pages/features, references, budget, etc."></textarea>
-                        </div>
+    <!-- CONTACT -->
+    <section id="contact" class="cta">
+        <div class="container contact-layout">
+            <div class="contact-copy">
+                <div class="eyebrow">Let's Build Together</div>
+                <h2>Your Website<br>Starts Here</h2>
+                <p>Tell us what your business does, who you serve, and what you need. We'll handle the rest — from design to launch — in days, not months.</p>
+                <div class="contact-details">
+                    <a href="https://wa.me/918889056138" target="_blank" rel="noopener" class="contact-detail">
+                        <span class="contact-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 5h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H11l-5 3v-3H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/></svg></span>
+                        <span><small>WhatsApp / Chat</small><strong>+91 88890 56138</strong></span>
+                    </a>
+                    <a href="mailto:ranvjbundela48@gmail.com" class="contact-detail">
+                        <span class="contact-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg></span>
+                        <span><small>Email Us</small><strong>info.actualizeweb@gmail.com</strong></span>
+                    </a>
+                    <div class="contact-detail">
+                        <span class="contact-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v5l3 2"/></svg></span>
+                        <span><small>Response Time</small><strong>Within 4 hours on business days</strong></span>
                     </div>
-
-                    <div class="form-actions">
-                        <div class="note">No commitment required. First consultation is free.</div>
-                        <button class="btn btn-primary" type="submit">Get a Free Quote</button>
-                    </div>
-                </form>
+                </div>
+            </div>
+            <div class="contact-card">
+                <h3>What We Need From You</h3>
+                <p>Share these details over WhatsApp or email — we'll draft your proposal within 24 hours.</p>
+                <ul>
+                    <li>Your business name and what you do</li>
+                    <li>Primary goal — bookings, leads, portfolio, or information</li>
+                    <li>Sections or pages you'd like</li>
+                    <li>Any website references you like</li>
+                    <li>Rough budget range</li>
+                </ul>
+                <div class="contact-actions">
+                    <a class="btn btn-primary" href="https://wa.me/918889056138?text=Hi%20ActualizeWeb%2C%20I%20want%20to%20start%20a%20website%20project." target="_blank" rel="noopener">Message on WhatsApp</a>
+                    <a class="btn btn-outline" href="mailto:ranvjbundela48@gmail.com">Send an Email</a>
+                </div>
+                <p class="contact-note">No commitment required. First consultation is free.</p>
             </div>
         </div>
     </section>
@@ -893,8 +964,8 @@ PAGE = r"""
                 <h4>Explore</h4>
                 <ul class="footer-list">
                     <li><a href="#services">Services</a></li>
-                    <li><a href="#work">Portfolio</a></li>
-                    <li><a href="#difference">Why ActualizeWeb</a></li>
+                    <li><a href="#portfolio">Portfolio</a></li>
+                    <li><a href="#why-us">Why ActualizeWeb</a></li>
                 </ul>
             </div>
 
@@ -911,8 +982,8 @@ PAGE = r"""
             <div>
                 <h4>Contact</h4>
                 <ul class="footer-list">
-                    <li><a href="https://wa.me/918889056138" target="_blank">WhatsApp: +91 8889056138</a></li>
-                    <li><a href="mailto:actualizeweb@gmail.com">actualizeweb@gmail.com</a></li>
+                    <li><a href="https://wa.me/918889056138" target="_blank">WhatsApp: +91 88890 56138</a></li>
+                    <li><a href="mailto:ranvjbundela48@gmail.com">info.actualizeweb@gmail.com</a></li>
                     <li>Response within 4 hours on business days</li>
                 </ul>
             </div>
@@ -920,6 +991,7 @@ PAGE = r"""
 
         <div class="footer-bottom">
             <span>© 2026 ActualizeWeb. All rights reserved.</span>
+            <span>Built with purpose — owned by you, forever.</span>
         </div>
     </div>
 </footer>
@@ -942,31 +1014,5 @@ document.querySelectorAll("#menu a").forEach(a => {
 def home():
     return render_template_string(PAGE)
 
-
-@app.route("/quote", methods=["POST"])
-def quote():
-    required = ["name", "business", "email"]
-    if not all(request.form.get(field, "").strip() for field in required):
-        flash("Please fill in your name, business name and email.")
-        return redirect(url_for("home") + "#quote")
-
-    try:
-        save_quote(request.form)
-        sheet_saved = save_to_google_sheet(request.form)
-        if sheet_saved is False:
-            flash("Request saved locally, but Google Sheets could not be reached. Check your Google Sheet webhook URL.")
-        else:
-            flash("Thanks! Your project request has been received.")
-    except sqlite3.Error:
-        flash("Something went wrong while saving your request. Please try again.")
-
-    return redirect(url_for("home") + "#quote")
-
-
 if __name__ == "__main__":
-    init_db()
-    app.run(
-        debug=os.getenv("FLASK_DEBUG", "").lower() in {"1", "true", "yes"},
-        host="127.0.0.1",
-        port=int(os.getenv("PORT", "5000")),
-    )
+    app.run(debug=True, host="127.0.0.1", port=5000)
